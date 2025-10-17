@@ -132,11 +132,9 @@ class CleanLowMetricRequest(BaseModel):
 class ExportRequest(BaseModel):
     collections: List[str] = ["principles", "trajectories"]
     format: str = "jsonl"
-    output_root_dir: Optional[str] = None # Renamed for clarity
+    output_root_dir: Optional[str] = None
     include_metadata: bool = True
-    experiment_name: Optional[str] = None # For server-side naming
-    # The 'filename' and 'mode' fields are no longer used by the primary export logic
-    # but are kept for potential backward compatibility or other uses.
+    experiment_name: Optional[str] = None
     filename: Optional[str] = None
     mode: str = "overwrite"
 

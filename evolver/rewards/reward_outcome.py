@@ -21,14 +21,6 @@ from evolver.rewards.config import *
 
 def extract_solution(solution_str):
     """Extract the equation from the solution string."""
-    # Remove everything before the first "Assistant:"
-    # if "Assistant:" in solution_str:
-    #     solution_str = solution_str.split("Assistant:", 1)[1]
-    # elif "<|im_start|>assistant" in solution_str:
-    #     solution_str = solution_str.split("<|im_start|>assistant", 1)[1]
-    # else:
-    #     return None
-    # solution_str = solution_str.split('\n')[-1]
 
     answer_pattern = r'<answer>(.*?)</answer>'
     match = re.finditer(answer_pattern, solution_str, re.DOTALL)
@@ -37,7 +29,6 @@ def extract_solution(solution_str):
     if not matches:
         return None
     
-    # If there are 2 or more matches, return the last one
     return matches[-1].group(1).strip()
 
 
@@ -73,6 +64,7 @@ def compute_score_em(solution_str, ground_truth, method='strict', format_score=0
 class OutcomeRewardOutput:
     reward: float
     metrics: dict = field(default_factory=dict)
+
 
 def dv_reward_fn(queries: List[str], api_url: str = diversity_api_url, do_print=False) -> float:
     payload = {

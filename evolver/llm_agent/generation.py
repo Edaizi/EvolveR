@@ -70,23 +70,18 @@ class LLMGenerationManager:
         include_success = flags.get("success_trajectory", True)
         include_failure = flags.get("failure_trajectory", True)
 
-        # Base prompt with the core query
-        # Note: The specific instruction format should be externalized to a prompt template file.
         base_prompt = f"Question: {query}\n\n"
         base_prompt=""
         
         # Helper to format a trajectory
         def format_trajectory(traj, traj_type):
             outcome = "Success" if traj_type == "positive" else "Failure"
-            # The log is a list containing a dict with the full dialogue history.
-            # We only need the 'content' part for the prompt.
+
             if traj.log and isinstance(traj.log, list) and len(traj.log) > 0 and "content" in traj.log[0]:
                 log_str = traj.log[0]["content"]
             else:
-                # Fallback if the log format is different from expectation
                 log_str = str(traj.log)
             
-            # Truncate the log string to prevent overly long prompts
             if len(log_str) > self.config.max_obs_length:
                 log_str = log_str[:self.config.max_obs_length] + "..."
 
@@ -96,7 +91,7 @@ class LLMGenerationManager:
         components = []
         for i, pkg in enumerate(packages):
             if include_principle:
-                # Priority 1: Principle description, type, metric_score(保留2位)
+                # Priority 1: Principle description, type, metric_score
                 components.append(f"[Principle {i}], type: {pkg.principle.type}, metric score: {pkg.principle.metric_score:.2f}, description: {pkg.principle.description}\n")
             
             if include_structure and pkg.principle.structure:
@@ -244,7 +239,6 @@ class LLMGenerationManager:
         tensors_with_mask = [prompt_with_mask, response]
         if info is not None:
             tensors.append(info)
-            # 如果提供了 masked_info，则按样本使用该张量；否则回退为整段置 pad 的旧逻辑
             if masked_info is not None:
                 tensors_with_mask.append(masked_info)
             else:
@@ -260,7 +254,8 @@ class LLMGenerationManager:
 
         return padded_tensor, padded_tensor_with_info
 
-    def _update_right_side(self, right_side: Dict, # 当前已有的历史response
+
+    def _update_right_side(self, right_side: Dict,
                           cur_responses: torch.Tensor,
                           next_obs_ids: torch.Tensor = None,
                           masked_info: torch.Tensor = None) -> Dict:
@@ -317,9 +312,6 @@ class LLMGenerationManager:
 
         padded_active_batch = DataProto.from_dict(padded_batch)
 
-        # for key in padded_active_batch.batch.keys():
-        #     padded_active_batch.batch[key] = padded_active_batch.batch[key].long()
-
         # Generate with padded batch
         padded_output = self.actor_rollout_wg.generate_sequences(padded_active_batch)
 
@@ -338,6 +330,7 @@ class LLMGenerationManager:
             
         padded_output.batch = trimmed_batch
         return padded_output
+
 
     def run_llm_loop(self, gen_batch, initial_input_ids: torch.Tensor) -> Tuple[Dict, Dict]:
         """Run main LLM generation loop."""
@@ -484,6 +477,7 @@ class LLMGenerationManager:
             final_output.meta_info['golden_docs'] = []
         return final_output
 
+
     def _compose_final_output(self, left_side: Dict,
                             right_side: Dict,
                             meta_info: Dict) -> Tuple[Dict, Dict]:
@@ -524,7 +518,6 @@ class LLMGenerationManager:
         NOTE penalty_for_invalid is not included in observation shown to the LLM
         
         Args:
-            envs: List of environment instances
             predictions: List of action predictions
             pad_token: Token to use for padding
             
@@ -629,6 +622,7 @@ class LLMGenerationManager:
         
         return next_obs, dones, valid_action, is_search, full_experience_events, full_retrieved_docs
 
+
     def postprocess_predictions(self, predictions: List[Any]) -> Tuple[List[int], List[bool]]:
         """
         Process (text-based) predictions from llm into actions and validity flags.
@@ -666,6 +660,7 @@ class LLMGenerationManager:
             
         return actions, contents
 
+
     def batch_search(self, queries: List[str] = None) -> str:
         """
         Batchified search for queries.
@@ -677,6 +672,7 @@ class LLMGenerationManager:
         results = self._batch_search(queries)['result']
         
         return [self._passages2string(result) for result in results], [self._passages2dict(result) for result in results]
+
 
     def _batch_search(self, queries):
         payload = {

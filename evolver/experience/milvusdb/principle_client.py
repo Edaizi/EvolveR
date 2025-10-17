@@ -91,7 +91,6 @@ class PrincipleVectorDBClient(BaseVectorDBClient):
                 return int(0 if v is None else v)
             except Exception:
                 return 0
-        # 字段级别
         if 'id' in d:
             d['id'] = _s(d.get('id'), 128)
         if 'description' in d:

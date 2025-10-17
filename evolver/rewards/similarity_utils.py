@@ -3,8 +3,7 @@ from openai import OpenAI
 from typing import List, Union
 from sklearn.metrics.pairwise import cosine_similarity as sk_cosine_similarity
 
-from tools.logger_factory import setup_logger
-logger = setup_logger("similarity_utils")
+
 
 class EmbeddingClient:
     _instance = None
@@ -19,7 +18,7 @@ class EmbeddingClient:
             self.api_url = api_url
             self.api_key = api_key if api_key is not None else "empty"
             self.model_name = model_name
-            logger.info(f"Initializing EmbeddingClient. Provider: {self.api_url}, Model: {self.model_name}")
+            print(f"Initializing EmbeddingClient. Provider: {self.api_url}, Model: {self.model_name}")
 
             try:
                 self.client = OpenAI(
@@ -28,7 +27,7 @@ class EmbeddingClient:
                     timeout=20.0, # Add a reasonable timeout
                 )
             except Exception as e:
-                logger.error(f"Failed to initialize OpenAI client: {e}")
+                print(f"Failed to initialize OpenAI client: {e}")
                 self.client = None
         self.max_retries = 3
         self.retry_delay_seconds=5
@@ -36,7 +35,7 @@ class EmbeddingClient:
     def get_embeddings(self, texts: List[str]) -> np.ndarray:
         """Fetches embeddings for a list of texts."""
         if not self.client:
-            logger.error("EmbeddingClient is not initialized.")
+            print("EmbeddingClient is not initialized.")
             return np.array([])
         
         if not texts or not all(isinstance(t, str) and t.strip() for t in texts):
@@ -52,7 +51,7 @@ class EmbeddingClient:
             return np.array(embeddings)
 
         except Exception as e:
-            logger.error(f"Error calling embedding API or parsing the response: {e}")
+            print(f"Error calling embedding API or parsing the response: {e}")
             return np.array([])
     
 
@@ -71,6 +70,7 @@ def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
     
     # sklearn's cosine_similarity returns a 2D array (matrix), so we get the single value
     return sk_cosine_similarity(v1, v2)[0, 0]
+
 
 def get_similarity_score(
     text1: Union[str, List[str]], 

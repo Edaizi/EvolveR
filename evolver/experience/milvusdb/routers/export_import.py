@@ -283,12 +283,11 @@ async def _export_collection(client, collection_type: str, output_dir: Path, exp
                 total_exported += len(records_chunk)
                 offset += len(records_chunk)  # Use actual returned count for the next offset
 
-                # If we received fewer records than we requested, we are at the end
                 if len(records_chunk) < limit:
                     break
             
             if format == "json":
-                f.write("\n]\n")  # End of JSON array
+                f.write("\n]\n")
 
         if total_exported == 0:
             logger.warning(f"No records found in '{collection_type}'; skipping export.")

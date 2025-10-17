@@ -1,16 +1,7 @@
 #!/bin/bash
-# Description: This script starts the MilvusDB server inside an Apptainer container.
-# It sources conda, activates the environment, and then runs the FastAPI server.
-# The EXPERIMENT_NAME environment variable should be set before calling this script
-# to ensure the database collections are named correctly for the experiment.
 
-# Execute the server startup sequence within a single non-interactive bash shell
-# inside the apptainer container. This makes it suitable for background execution.
-apptainer exec --nv --bind "/mnt:/mnt" /mnt/petrelfs/wurong/glibc_ubuntu22.sif /bin/bash -c "
 export EXPERIMENT_NAME=${EXPERIMENT_NAME}
-# Replace all hyphens with underscores in experiment name to comply with Milvus collection naming rules
 export EXPERIMENT_NAME=\${EXPERIMENT_NAME//-/_}
-# Pass through VDB paths if they are set from srun
 export VDB_BASE_DIR=${VDB_BASE_DIR}
 # Auto import controls (optional)
 export VDB_AUTO_IMPORT=${VDB_AUTO_IMPORT:-0}
@@ -23,9 +14,8 @@ export EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-empty}
 export EMBEDDING_MODEL=${EMBEDDING_MODEL:-bge_m3}
 export VDB_IMPORT_DB_FILE=${VDB_IMPORT_DB_FILE:-}
 
-source /mnt/petrelfs/wurong/miniconda3/etc/profile.d/conda.sh
-conda activate exp-rl
-cd /mnt/petrelfs/wurong/workspace/evolver/evolver/experience/milvusdb
+conda activate evolver
+cd ./evolver/evolver/experience/milvusdb
 
 # Restore from a .db file if specified
 if [ -n "\$VDB_IMPORT_DB_FILE" ] && [ -f "\$VDB_IMPORT_DB_FILE" ]; then
@@ -51,4 +41,3 @@ fi
 
 echo Starting DB server for experiment: \${EXPERIMENT_NAME}
 python db_server.py
-"

@@ -1,34 +1,35 @@
 import os
 import json
 import uuid
+import logging
 from typing import List, Dict, Any, Optional, Protocol
 from dataclasses import dataclass, asdict, field
-from collections import deque
+from collections import deque, defaultdict
 import sys
 import requests
 import time
 import random
 import torch
-from verl import DataProto
-from verl.utils.model import compute_position_id_with_mask
-from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-import verl.utils.torch_functional as verl_F
 import re
 from tqdm import tqdm
-from collections import defaultdict
 import itertools
+import concurrent.futures as _fut
+from functools import partial as _partial
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)  # 上1级目录
-p_project_root = os.path.dirname(project_root)  # 上2级目录
+project_root = os.path.dirname(current_dir) 
+p_project_root = os.path.dirname(project_root) 
 sys.path.extend([project_root, p_project_root])
 
 from evolver.experience import config as exp_config
 from evolver.experience import prompts as exp_prompts
+from verl import DataProto
+from verl.utils.model import compute_position_id_with_mask
+from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
+import verl.utils.torch_functional as verl_F
 
 
-from tools.logger_factory import setup_logger
-logger = setup_logger("experience_manager")
+logger = logging.getLogger("experience_manager")
 
 
 
@@ -131,7 +132,6 @@ class VectorDBClient:
             do_print = random.randint(1, 1000) == 1
 
             if do_print:
-                # 检索耗时
                 logger.info(f"Successfully retrieved trajectory {trajectory_id} from VDB")
                 logger.info(f"Trajectory {trajectory_id} retrieval time: {time.time() - start_time} seconds")
 
@@ -141,6 +141,7 @@ class VectorDBClient:
         except requests.RequestException as e:
             logger.error(f"Failed to retrieve trajectory {trajectory_id}, error: {e}")
             return None
+
 
     def add_trajectories_batch(self, trajectories: List["Trajectory"]) -> bool:
         """Batch add trajectories via HTTP API."""
@@ -172,6 +173,7 @@ class VectorDBClient:
             logger.error(f"Failed to batch add trajectories to VDB: {e}")
             return False
 
+
     def get_trajectories(self, trajectory_ids: List[str]) -> List["Trajectory"]:
         """Batch get trajectories by IDs via HTTP API."""
         if not trajectory_ids:
@@ -196,6 +198,7 @@ class VectorDBClient:
             logger.error(f"Failed to batch get trajectories from VDB: {e}")
             return []
 
+
     def update_trajectory(self, trajectory_id: str, **kwargs) -> bool:
         """Update a trajectory in the database via HTTP API."""
         url = f"{self.base_url}/trajectories/"
@@ -211,6 +214,7 @@ class VectorDBClient:
             logger.error(f"Failed to update trajectory {trajectory_id}, error: {e}")
             return False
     
+
     def get_vdb_status(self) -> dict:
         url = f"{self.base_url}/initial/data-status"
         try:
@@ -223,6 +227,7 @@ class VectorDBClient:
         except requests.RequestException as e:
             logger.error(f"Failed to get VDB status: {e}")
             return {}
+
 
     def get_principles_batch(self, principle_ids: List[str]) -> List["ExperiencePrinciple"]:
         """Batch get principles by IDs via HTTP API."""
@@ -250,6 +255,7 @@ class VectorDBClient:
             logger.error(f"Failed to batch get principles from VDB: {e}")
             return []
 
+
     def update_principles_batch(self, principles_data: List[Dict]) -> bool:
         """Batch update principles via HTTP API."""
         if not principles_data:
@@ -265,6 +271,7 @@ class VectorDBClient:
             logger.error(f"Failed to batch update principles in VDB: {e}")
             return False
 
+
     def delete_principle(self, principle_id: str) -> bool:
         """Delete a principle by its ID via HTTP API."""
         url = f"{self.base_url}/principles/"
@@ -277,6 +284,7 @@ class VectorDBClient:
         except requests.RequestException as e:
             logger.error(f"Failed to delete principle {principle_id} from VDB: {e}")
             return False
+
 
     def delete_principles_batch(self, principle_ids: List[str]) -> bool:
         """Batch delete principles by their IDs via HTTP API."""
@@ -310,22 +318,17 @@ class VectorDBClient:
 
 @dataclass
 class ExperiencePrinciple:
-    """
-    The core, distilled unit of knowledge in the experience base.
-    Represents a piece of guiding or cautionary advice.
-    """
     principle_id: str
     type: str  # 'guiding' or 'cautionary'
     description: str  # Natural language description for semantic retrieval
     structure: List[Dict[str, str]]  # Structured triplets for precise logic
-    metric_score: float = 0.5      # Laplace smoothing
+    metric_score: float = 0.5     
     usage_count: int = 0
     success_count: int = 0
-    # Use deque for efficient appends and pops from the left
     successful_trajectory_ids: "deque[str]" = field(default_factory=lambda: deque(maxlen=exp_config.MAX_SUCCESS_TRAJECTORIES_PER_PRINCIPLE))
     failed_trajectory_ids: "deque[str]" = field(default_factory=lambda: deque(maxlen=exp_config.MAX_FAILED_TRAJECTORIES_PER_PRINCIPLE))
     
-    # Custom method to handle deque for JSON serialization
+
     def to_dict(self):
         d = asdict(self)
         d['successful_trajectory_ids'] = list(self.successful_trajectory_ids)
@@ -336,7 +339,6 @@ class ExperiencePrinciple:
     def from_dict(cls, d):
         d['successful_trajectory_ids'] = deque(d.get('successful_trajectory_ids', []), maxlen=exp_config.MAX_SUCCESS_TRAJECTORIES_PER_PRINCIPLE)
         d['failed_trajectory_ids'] = deque(d.get('failed_trajectory_ids', []), maxlen=exp_config.MAX_FAILED_TRAJECTORIES_PER_PRINCIPLE)
-        # Handle potential key errors for backward compatibility if new fields are added
         fields = cls.__dataclass_fields__.keys()
         filtered_d = {k: v for k, v in d.items() if k in fields}
         return cls(**filtered_d)
@@ -344,9 +346,6 @@ class ExperiencePrinciple:
 
 @dataclass
 class Trajectory:
-    """
-    The raw material for experience distillation, representing a full interaction episode.
-    """
     trajectory_id: str
     question: str
     log: List[Dict[str, Any]] 
@@ -357,30 +356,23 @@ class Trajectory:
     def to_dict(self):
         d = asdict(self)
         d['log'] = [step.copy() for step in self.log]
-        # Convert deque to list for JSON serialization
         d['retrieved_principles'] = dict(self.retrieved_principles)
-    
         return d
     
     @classmethod
     def from_dict(cls, d: dict):
-        # Make a copy to work with, preserving the original dict
         init_data = d.copy()
-
-        # If 'log' is a string, parse it from JSON.
         log = init_data.get('log', [])
         if isinstance(log, str):
             try:
                 init_data['log'] = json.loads(log)
             except (json.JSONDecodeError, TypeError):
-                init_data['log'] = [] # On error, default to an empty list
+                init_data['log'] = []
 
-        # If 'retrieved_principles' is a list, convert to dict.
         principles = init_data.get('retrieved_principles', {})
         if isinstance(principles, list):
             init_data['retrieved_principles'] = {pid: 1.0 for pid in principles}
 
-        # Filter for known fields and create the dataclass instance
         known_fields = cls.__dataclass_fields__.keys()
         filtered_data = {k: v for k, v in init_data.items() if k in known_fields}
         
@@ -389,10 +381,6 @@ class Trajectory:
 
 @dataclass
 class RetrievedExperiencePackage:
-    """
-    A rich package returned to the agent, containing not just a principle
-    but also concrete positive and negative examples.
-    """
     principle: ExperiencePrinciple
     similarity_score: float
     positive_examples: List[Trajectory]
@@ -401,10 +389,6 @@ class RetrievedExperiencePackage:
 
 
 class ExperienceManager:
-    """
-    A unified manager for an agent's long-term experience, capable of
-    learning from both successes and failures to build a robust knowledge base.
-    """
     def __init__(self, vector_db_client: VectorDBClient, tokenizer: Any, config: Any):
         self.vector_db_client = vector_db_client
         self.tokenizer = tokenizer
@@ -430,12 +414,9 @@ class ExperienceManager:
         logger.info(f"Use external LLM for summary: {self.config.experience.summary_llm_api}")
 
 
-    # --- Public API ---
     def add_trajectory_from_dict(self, traj_data: dict):
         """Adds a completed trajectory from a dictionary to the processing buffer."""
-        # Potentially validate the dictionary keys here
         try:
-            # Ensure retrieved_principles is a dict
             if 'retrieved_principles' not in traj_data or not isinstance(traj_data['retrieved_principles'], dict):
                 traj_data['retrieved_principles'] = {}
             trajectory = Trajectory(**traj_data)
@@ -453,10 +434,6 @@ class ExperienceManager:
             logger.info(f"Added trajectory {trajectory.trajectory_id} to buffer. Buffer size: {len(self.trajectory_buffer)}.")
 
     def retrieve(self, question: str, top_k: int = exp_config.TOP_K_PRINCIPLES) -> List[RetrievedExperiencePackage]:
-        """
-        Retrieves relevant experience packages for a given question, including
-        principles and their associated positive/negative examples.
-        """
         start_time = time.time()
         vdb_status = self.vector_db_client.get_vdb_status()
         if not vdb_status or vdb_status.get("data_status", {}).get("principles_count") in ("N/A", 0) or not question:
@@ -542,10 +519,6 @@ class ExperienceManager:
 
 
     def reflection(self, actor_rollout_wg, export: bool = True) -> None:
-        """
-        The core offline process. It updates metrics based on recent trajectories
-        and distills new principles from them.
-        """
         self.actor_rollout_wg = actor_rollout_wg
         if not self.trajectory_buffer:
             logger.info("Reflection skipped: trajectory buffer is empty.")
@@ -559,21 +532,14 @@ class ExperienceManager:
             logger.error(f"Failed to flush trajectories before reflection: {e}")
 
         logger.info(f"Starting reflection on {len(self.trajectory_buffer)} trajectories...")
-        
-        start_time = time.time()
-
+    
         self._update_metric_scores()
-
-        logger.info(f"Update metric scores time: {time.time() - start_time:.2f} seconds")
         
         self.merged_count, self.deduplicated_principles_count = self._distill_new_experiences()
 
-        # Log a summary for periodic visibility instead of doing a full, heavy export
         self._log_reflection_summary(self.trajectory_buffer, self.merged_count, self.deduplicated_principles_count)
 
-        # Periodic export snapshot
         if export:
-            # Optional: brief wait to reduce export race with recent inserts
             try:
                 status = self.vector_db_client.get_vdb_status()
                 logger.info(f"VDB status before export: {status.get('data_status', {}) if status else 'N/A'}")
@@ -587,16 +553,10 @@ class ExperienceManager:
         logger.info("Reflection finished. Clearing trajectory buffer.")
         self.trajectory_buffer.clear()
 
+
     def _deduplicate_potential_principles(self, principles: List[Dict]) -> List[Dict]:
-        """
-        Deduplicates a list of potential principles using LLM-based similarity checks.
-        It forms a graph of similar principles and picks one representative from each connected component.
-        This is intended for principles generated from the same question.
-        """
         if len(principles) <= 1:
             return principles
-
-        # Fallback to simple description matching if actor is not available for LLM calls
         if self.actor_rollout_wg is None:
             logger.warning("actor_rollout_wg is not set. Falling back to exact description match for deduplication.")
             unique_principles = []
@@ -608,7 +568,6 @@ class ExperienceManager:
             return unique_principles
 
         prompts = []
-        # Store indices of principles in pairs
         all_pairs = []
         for i, j in itertools.combinations(range(len(principles)), 2):
             # Only compare within the same question and same type to avoid over-merging
@@ -677,7 +636,6 @@ class ExperienceManager:
 
 
     def _log_reflection_summary(self, processed_trajectories: List[Trajectory], merged_count: int, deduplicate_count: int):
-        """Logs a summary of the reflection cycle for periodic visibility."""
         logger.info(f"Reflection Cycle Summary: Processed trajectories: {len(processed_trajectories)}; Merged into existing principles: {merged_count}; Unique principles distilled: {deduplicate_count}; Total principles in DB: {self.vector_db_client.get_vdb_status().get('data_status', {}).get('principles_count', 'N/A')}; Total trajectories in DB: {self.vector_db_client.get_vdb_status().get('data_status', {}).get('trajectories_count', 'N/A')}")
 
 
@@ -685,8 +643,7 @@ class ExperienceManager:
         """Saves principles and trajectory store via VDB export API."""
         try:
             url = f"{self.vector_db_client.base_url}/export/"
-            
-            # The root directory is now directly from the config
+
             output_root_dir = self.experience_data_dir
             
             exp_name = os.environ.get("EXPERIMENT_NAME") or getattr(self.config.trainer, "experiment_name", "exp")
@@ -764,8 +721,8 @@ class ExperienceManager:
         if update_payload:
             self.vector_db_client.update_principles_batch(update_payload)
 
+
     def _batch_llm_call(self, prompts: List[str], max_new_tokens: int, batch_size: int = 32, state="", show_progress: bool = True) -> Optional[List[str]]:
-        """Dispatcher to use either external API or internal actor for LLM calls."""
         if not isinstance(batch_size, int):
             logger.warning(f"Batch size is not an integer: {batch_size}. Converting to integer.")
             try:
@@ -779,8 +736,8 @@ class ExperienceManager:
         else:
             return self._batch_llm_call_with_actor(prompts, max_new_tokens, batch_size, state, show_progress)
 
+
     def _batch_llm_call_with_api(self, prompts: List[str], max_new_tokens: int, batch_size: int = 32, state="", show_progress: bool = True) -> Optional[List[str]]:
-        """Uses an external LLM API to get responses for a batch of prompts."""
         api_config = self.config.experience.summary_llm_api
         api_url = api_config.get('url')
         api_key = api_config.get('api_key', 'EMPTY')
@@ -811,9 +768,6 @@ class ExperienceManager:
         if not prompts:
             return []
 
-        import concurrent.futures as _fut
-        from functools import partial as _partial
-
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -824,7 +778,7 @@ class ExperienceManager:
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_new_tokens,
-                "temperature": 1.0,  # Match actor rollout config
+                "temperature": 1.0,
             }
             try:
                 resp = requests.post(api_url, headers=headers, json=payload, timeout=120, proxies=proxies)
@@ -860,7 +814,6 @@ class ExperienceManager:
         return results
 
     def _batch_llm_call_with_actor(self, prompts: List[str], max_new_tokens: int, batch_size: int = 32, state="", show_progress: bool = True) -> Optional[List[str]]:
-        """Uses the actor_rollout_wg to get responses for a batch of prompts, following verl's tokenization logic."""
         if self.actor_rollout_wg is None:
             logger.error("actor_rollout_wg is not set in ExperienceManager. Cannot perform LLM call.")
             return None
@@ -869,7 +822,6 @@ class ExperienceManager:
 
         all_responses = []
         
-        # Process prompts in batches
         iterator = range(0, len(prompts), batch_size)
         if show_progress:
             iterator = tqdm(iterator, desc=f"batch distill({state}) experiences...")
@@ -877,14 +829,12 @@ class ExperienceManager:
             batch_prompts = prompts[i:i + batch_size]
             
             try:
-                # Step 1: Apply chat template to all prompts in this batch
                 prompts_with_template = [
                     self.tokenizer.apply_chat_template(
                         [{"role": "user", "content": p}], add_generation_prompt=True, tokenize=False
                     ) for p in batch_prompts
                 ]
 
-                # Step 2: Tokenize each prompt individually using the verl helper function
                 tokenized_outputs = [
                     verl_F.tokenize_and_postprocess_data(
                         prompt=p,
@@ -896,16 +846,13 @@ class ExperienceManager:
                     ) for p in prompts_with_template
                 ]
 
-                # Step 3: Extract and stack the tensors
                 all_input_ids = [out[0] for out in tokenized_outputs]  # Keep the batch dimension
                 all_attention_masks = [out[1] for out in tokenized_outputs]
 
-                # Concatenate along batch dimension
                 input_ids = torch.cat(all_input_ids, dim=0)
                 attention_mask = torch.cat(all_attention_masks, dim=0)
                 position_ids = compute_position_id_with_mask(attention_mask)
 
-                # Step 4: Create DataProto and call the actor
                 batch_data: DataProto = DataProto.from_dict({
                     'input_ids': input_ids, 
                     'attention_mask': attention_mask, 
@@ -922,7 +869,6 @@ class ExperienceManager:
                     'recompute_log_prob': False,
                 }
 
-                # Pad to be divisible by world_size
                 gen_batch_padded, pad_size = pad_dataproto_to_divisor(gen_batch, self.actor_rollout_wg.world_size)
                 output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(gen_batch_padded)
                 output_gen_batch = unpad_dataproto(output_gen_batch_padded, pad_size=pad_size)
@@ -939,19 +885,16 @@ class ExperienceManager:
 
         return all_responses
 
+
     def _parse_summarization_response(self, response: str, trajectory: Trajectory, should_generate_structure: bool = False) -> Optional["tuple[str, List[Dict], str]"]:
-        """Parses the raw LLM response from summarization into a structured format"""
         if not response:
             return None
 
         if not should_generate_structure:
-            # When no structure is requested, the response is expected to be a single sentence principle.
             description = response.strip()
             if description.startswith("[Output]"):
-                # The prompt templates end with "[Output]:", so we split on that.
                 description = description.split("[Output]", 1)[-1].strip().lstrip(':').strip()
 
-            # Clean up common markdown/LLM artifacts
             description = re.sub(r'```.*?\n|```', '', description, flags=re.DOTALL).strip()
             
             if not description:
@@ -967,13 +910,11 @@ class ExperienceManager:
             
             return description, structure, p_type
 
-        # --- Original logic for when structure is expected ---
         description = ""
         structure_str = ""
         response = response.strip().strip("\n")
         if response.startswith("[Output]"):
             response = response.split("[Output]")[1].strip().strip("\n")
-        # Use regex to robustly find description and structure parts
         desc_match = re.search(r"\[DESCRIPTION\]:(.*?)(?=\[STRUCTURE\]:|$)", response, re.DOTALL)
         if desc_match:
             description = desc_match.group(1).strip().strip("\n")
@@ -982,20 +923,17 @@ class ExperienceManager:
         if struct_match:
             structure_str = struct_match.group(1).strip()
         
-        # Clean up common markdown/LLM artifacts
         structure_str = re.sub(r'```json|```', '', structure_str).strip()
 
         structure = []
         if structure_str:
             try:
-                # First, try to parse as valid JSON. This is the ideal case.
                 parsed_json = json.loads(structure_str)
                 if isinstance(parsed_json, list) and all(isinstance(item, dict) for item in parsed_json):
                     structure = parsed_json
                 elif isinstance(parsed_json, list) and all(isinstance(item, (list, tuple)) and len(item) == 3 for item in parsed_json):
                     structure = [{"subject": str(s), "predicate": str(p), "object": str(o)} for s, p, o in parsed_json]
             except json.JSONDecodeError:
-                # If JSON parsing fails, use regex to find (s, p, o) triplets
                 triplets = re.findall(r'[\(\[]\s*["\']?([^,]+?)["\']?\s*,\s*["\']?([^,]+?)["\']?\s*,\s*["\']?([^,\]\)]+?)["\']?\s*[\)\]]', structure_str)
                 for s, p, o in triplets:
                     structure.append( (s.strip().strip('"\'').strip("(").strip("[").strip(")").strip("]"), p.strip().strip('"\'').strip("(").strip("[").strip(")").strip("]"), o.strip().strip('"\'').strip("(").strip("[").strip(")").strip("]")) )
@@ -1005,18 +943,14 @@ class ExperienceManager:
             return None
 
         if not description and structure:
-            # If description is missing, generate one from the structured triplets
-            # This logic must handle both list of dicts (from JSON) and list of tuples (from regex)
             triplet_strs = []
             for t in structure:
                 if isinstance(t, dict):
-                    # Handles JSON parsing result
                     s = t.get("subject", "")
                     p = t.get("predicate", "")
                     o = t.get("object", "")
                     triplet_strs.append(f"{s}, {p}, {o}")
                 elif isinstance(t, (list, tuple)) and len(t) == 3:
-                    # Handles regex fallback result
                     triplet_strs.append(f"{t[0]}, {t[1]}, {t[2]}")
 
             description = "Principle based on relations: " + "; ".join(triplet_strs)
@@ -1034,22 +968,15 @@ class ExperienceManager:
 
 
     def _batch_find_matching_principles(self, potential_principles: List[Dict], match_batch_size: int = 128) -> List[List[ExperiencePrinciple]]:
-        """
-        Finds matching principles for a batch of potential principles using batch LLM calls.
-        It internally chunks the matching prompts to avoid overloading the LLM.
-        """
         all_prompts = []
-        # metadata to map responses back to their original potential_principle and candidate
         prompts_meta = []
         
         for i, p_principle in enumerate(potential_principles):
             description = p_principle["description"]
-            # Step 1: Get all candidates for the current potential principle
             candidates = self.vector_db_client.search_principle(description, top_k=exp_config.TOP_K_PRINCIPLES)
             if not candidates:
                 continue
 
-            # Step 2: Prepare prompts for all valid candidates
             for candidate_id, similarity, principle  in candidates:
                 if similarity < exp_config.SIMILARITY_THRESHOLD:
                     continue
@@ -1067,14 +994,12 @@ class ExperienceManager:
         if not all_prompts:
             return [[] for _ in potential_principles]
 
-        # Process all prompts in manageable chunks
         all_responses = []
         logger.info(f"Checking {len(all_prompts)} potential principle matches in chunks of {match_batch_size}...")
         
             
         all_responses = self._batch_llm_call(all_prompts, max_new_tokens=8, state="match_principle", batch_size=self.config.experience.summary_experience_batch_size)
             
-        # Process all collected responses
         match_results = [[] for _ in potential_principles]
         for i, response in enumerate(all_responses):
             if response and "yes" in response.lower():
@@ -1091,16 +1016,10 @@ class ExperienceManager:
 
 
     def _distill_new_experiences(self) -> int:
-        """
-        Iterates through the buffer to distill and integrate new principles using batch processing.
-        Returns the number of trajectories that were merged into existing principles.
-        """
-
         logger.info("Distilling new experiences using batch processing...")
         if not self.trajectory_buffer:
             return 0
 
-        # --- Step 1: Batch Summarize Trajectories ---
         logger.info(f"Summarizing {len(self.trajectory_buffer)} trajectories in buffer")
 
         should_generate_structure = self.config.experience.retrieve_component.get("structure", False)
@@ -1144,7 +1063,6 @@ class ExperienceManager:
 
         logger.info(f"Successfully parsed {len(potential_principles)} potential principles from trajectories.")
         
-        # --- Step 2: Global deduplication in one batch (restricted within same question and type) ---
         if potential_principles:
             before_cnt = len(potential_principles)
             potential_principles = self._deduplicate_potential_principles(potential_principles)
@@ -1154,10 +1072,8 @@ class ExperienceManager:
         if not potential_principles:
             return 0, 0
 
-        # --- Step 3: Batch find matching principles ---
         all_matches = self._batch_find_matching_principles(potential_principles, match_batch_size=self.config.experience.summary_experience_batch_size)
 
-        # --- Step 4: Process each potential principle with its matches ---
         logger.info("Processing potential principles...")
         merged_count = 0
         for i, p_principle in enumerate(potential_principles):
@@ -1179,14 +1095,12 @@ class ExperienceManager:
 
 
     def _create_new_principle(self, desc: str, struct: List[Dict], p_type: str, source_traj: Trajectory):
-        """Creates and stores a new ExperiencePrinciple."""
         special_tokens = [
             "<think>", "</think>", "<search_experience>", "</search_experience>",
             "<search_knowledge>", "</search_knowledge>", "<answer>", "</answer>",
             "<experience>", "</experience>", "<information>", "</information>"
         ]
         
-        # 1. Check for special tokens
         if any(token in desc for token in special_tokens):
             logger.warning(f"Rejecting new principle due to special tokens: '{desc[:20]}...'")
             return
@@ -1205,7 +1119,6 @@ class ExperienceManager:
         url = f"{self.vector_db_client.base_url}/principles/"
 
         try:
-            # Use client helper to ensure correct payload keys (principle_type, etc.)
             self.vector_db_client.add(
                 principle_id=new_principle.principle_id,
                 description=new_principle.description,
@@ -1227,18 +1140,14 @@ class ExperienceManager:
 
 
     def _merge_into_existing_principle(self, principle: ExperiencePrinciple, source_traj: Trajectory):
-        """Merges a new trajectory's insights into an existing principle using VectorDBClient."""
         logger.info(f"Merging trajectory {source_traj.trajectory_id} into existing principle {principle.principle_id}")
         
-        # Link the trajectory and update the principle in VectorDB
         self._link_trajectory_to_principle(source_traj, principle)
         
-        # Update the principle's metric score based on this trajectory
         principle.usage_count += 1
         if source_traj.final_outcome:
             principle.success_count += 1
         try:
-            # Update the principle in VectorDB with new metric scores
             self.vector_db_client.update_principle(
                 principle_id=principle.principle_id,
                 usage_count=principle.usage_count,
@@ -1253,15 +1162,12 @@ class ExperienceManager:
             logger.info(f"Successfully merged trajectory {source_traj.trajectory_id} into principle {principle.principle_id}")
 
     def _link_trajectory_to_principle(self, trajectory: Trajectory, principle: ExperiencePrinciple):
-        """Links a trajectory to a principle after the trajectory has already been archived."""
         
-        # Update the principle with the new trajectory ID
         if trajectory.final_outcome:
             principle.successful_trajectory_ids.append(trajectory.trajectory_id)
         else:
             principle.failed_trajectory_ids.append(trajectory.trajectory_id)
         
-        # Update the principle in the vector database
         self.vector_db_client.update_principle(
             principle_id=principle.principle_id,
             successful_trajectory_ids=list(principle.successful_trajectory_ids),
@@ -1274,15 +1180,8 @@ class ExperienceManager:
 
 
     def _compact_trajectory(self, trajectory: Trajectory, structured: bool = False) -> Trajectory:
-        """
-        Creates a compacted version of a trajectory for agent consumption.
-        - If `structured` is False (default): keep original single-string log format, only truncate
-          contents within <think> and <information> tags in-place.
-        - If `structured` is True: parse raw log into a structured list of events.
-        """
         compacted_traj_data = asdict(trajectory)
 
-        # Determine if the log is the raw single-string format
         raw_single = (
             trajectory.log
             and isinstance(trajectory.log, list)
@@ -1290,7 +1189,6 @@ class ExperienceManager:
             and "content" in trajectory.log[0]
         )
 
-        # If not raw single string, just truncate fields in-place and keep existing structure
         if not raw_single:
             compacted_log = []
             for step in trajectory.log:
@@ -1305,13 +1203,11 @@ class ExperienceManager:
             compacted_traj_data['log'] = compacted_log
             return Trajectory(**compacted_traj_data)
 
-        # It is the raw single-string format; truncate in-place first
         full_dialogue = trajectory.log[0]['content']
 
         def _truncate(content: str, max_len: int) -> str:
             return content[:max_len] + "..." if len(content) > max_len else content
 
-        # Truncate <think> blocks
         full_dialogue = re.sub(
             r'<think>(.*?)</think>',
             lambda m: f"<think>{_truncate(m.group(1), exp_config.MAX_THOUGHT_CHARS)}</think>",
@@ -1319,7 +1215,6 @@ class ExperienceManager:
             flags=re.DOTALL
         )
 
-        # Truncate <information> blocks
         full_dialogue = re.sub(
             r'<information>(.*?)</information>',
             lambda m: f"<information>{_truncate(m.group(1), exp_config.MAX_DOC_CHARS)}</information>",
@@ -1327,36 +1222,30 @@ class ExperienceManager:
             flags=re.DOTALL
         )
 
-        # Default behavior: keep single-string log
         if not structured:
             compacted_traj_data['log'] = [{"event": "dialogue", "content": full_dialogue}]
             return Trajectory(**compacted_traj_data)
 
-        # Structured=True: parse into structured list of events
         pattern = r'<(think|search|search_knowledge|search_experience|answer|information|experience)>(.*?)</\1>'
         parsed_log = []
         for match in re.finditer(pattern, full_dialogue, re.DOTALL):
             tag = match.group(1)
             content = match.group(2).strip()
             
-            # Normalize 'search' to 'search_knowledge' for consistent processing
             if tag == "search":
                 tag = "search_knowledge"
 
-            # Now, apply compaction (truncation) and structure the log
             if tag == "think":
                 if len(content) > exp_config.MAX_THOUGHT_CHARS:
                     content = content[:exp_config.MAX_THOUGHT_CHARS] + "..."
                 parsed_log.append({"thought": content})
             
             elif tag in ["search_knowledge", "search_experience", "answer"]:
-                # Structure actions more explicitly
                 parsed_log.append({"action": {"type": tag, "input": content}})
 
             elif tag in ["information", "experience"]:
                 if len(content) > exp_config.MAX_DOC_CHARS:
                     content = content[:exp_config.MAX_DOC_CHARS] + "..."
-                # Use a consistent "observation" key
                 parsed_log.append({"observation": content})
 
         compacted_traj_data['log'] = parsed_log

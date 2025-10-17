@@ -38,7 +38,6 @@ def experience_reward_fn(
     Returns:
         ExperienceRewardOutput: 
     """
-    ##
     
     max_reward = 0.0
     best_metrics = {

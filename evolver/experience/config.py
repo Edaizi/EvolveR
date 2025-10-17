@@ -1,9 +1,4 @@
-"""
-Experience Manager Configuration
-"""
-
-
-# --- Reflection Parameters ---
+# --- Distillation Parameters ---
 # Similarity threshold to consider a new summary as matching an existing principle.
 SIMILARITY_THRESHOLD = 0.85
 

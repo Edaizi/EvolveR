@@ -43,14 +43,10 @@ def exp_rl_reward_fn(
 
     queries = data_item.non_tensor_batch['question']
     
-    # --- Reward Calculation with Weight-based Skipping ---
-
-    # A simple mock object to hold reward and metrics, preventing errors for skipped components.
     class RewardOutputMock:
         def __init__(self, reward=0.0, metrics=None):
             from collections import defaultdict
             self.reward = reward
-            # Use a defaultdict that returns 0.0 for missing keys, ensuring safe access.
             self.metrics = defaultdict(lambda: 0.0)
             if metrics:
                 self.metrics.update(metrics)

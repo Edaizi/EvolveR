@@ -277,7 +277,6 @@ async def batch_get_principles(
         
         results = []
         for p in principles:
-            # Reusing the parsing logic from single-get for consistency
             try:
                 structure = json.loads(p.get('structure', '[]'))
             except (json.JSONDecodeError, TypeError):
@@ -311,7 +310,8 @@ async def batch_get_principles(
         logger.error(f"Error batch getting principles: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to batch get principles: {str(e)}")
 
-# ---------------------- Batch Update Principles ---------------------
+
+
 @router.put("/batch_update", response_model=StatusResponse)
 async def batch_update_principles(
     request: PrincipleBatchUpdateRequest,
