@@ -5,7 +5,7 @@
 <p align="center">
     <!-- Paper & License -->
     <a href="URL_TO_ARXIV_PAPER" target="_blank">
-        <img alt="arXiv" src="https://img.shields.io/badge/arXiv-24XX.XXXXX-b31b1b.svg?style=for-the-badge">
+        <img alt="arXiv" src="https://img.shields.io/badge/arXiv-25XX.XXXXX-b31b1b.svg?style=for-the-badge">
     </a>
     <a href="LICENSE" target="_blank">
         <img alt="License" src="https://img.shields.io/github/license/Edaizi/EvolveR?style=for-the-badge&color=blue">
@@ -29,7 +29,6 @@ This repository contains the official implementation of **EvolveR**, a framework
 ---
 
 ## 📰 Updates
-- **`2025-10-DD`**: Paper are publicly available on [arxiv]().
 - **`2025-10-20`**: Codebase is publicly available.
 
 ## 🎯 Getting Started
@@ -91,7 +90,7 @@ We would like to thank the developers of the following projects for their open-s
 - [Search-R1](https://github.com/PeterGriffinJin/Search-R1)
 - [O2-Searcher](https://github.com/KnowledgeXLab/O2-Searcher)
 
-## Citation
+<!-- ## Citation
 If you find our paper and code useful, please kindly cite us. A BibTeX entry will be provided upon publication.
 ```bibtex
 @misc{your_paper_2025_evolver,
@@ -102,4 +101,4 @@ If you find our paper and code useful, please kindly cite us. A BibTeX entry wil
     archivePrefix={arXiv},
     primaryClass={cs.AI}
 }
-```
+``` -->
