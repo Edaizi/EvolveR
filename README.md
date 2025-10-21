@@ -4,8 +4,8 @@
 </div>
 <p align="center">
     <!-- Paper & License -->
-    <a href="URL_TO_ARXIV_PAPER" target="_blank">
-        <img alt="arXiv" src="https://img.shields.io/badge/arXiv-25XX.XXXXX-b31b1b.svg?style=for-the-badge">
+    <a href="http://arxiv.org/abs/2510.16079" target="_blank">
+        <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2510.16079-b31b1b.svg?style=for-the-badge">
     </a>
     <a href="LICENSE" target="_blank">
         <img alt="License" src="https://img.shields.io/github/license/Edaizi/EvolveR?style=for-the-badge&color=blue">
@@ -29,6 +29,7 @@ This repository contains the official implementation of **EvolveR**, a framework
 ---
 
 ## 📰 Updates
+- **`2025-10-21`**: Paper is publicly available in [arxiv](http://arxiv.org/abs/2510.16079).
 - **`2025-10-20`**: Codebase is publicly available.
 
 ## 🎯 Getting Started
@@ -90,15 +91,15 @@ We would like to thank the developers of the following projects for their open-s
 - [Search-R1](https://github.com/PeterGriffinJin/Search-R1)
 - [O2-Searcher](https://github.com/KnowledgeXLab/O2-Searcher)
 
-<!-- ## Citation
+## Citation
 If you find our paper and code useful, please kindly cite us. A BibTeX entry will be provided upon publication.
 ```bibtex
-@misc{your_paper_2025_evolver,
-    title={EvolveR: Self-Evolving LLM Agents through an Experience-Driven Lifecycle},
-    author={Your Name and Co-authors},
-    year={2025},
-    eprint={XXXX.XXXXX},
-    archivePrefix={arXiv},
-    primaryClass={cs.AI}
-}
-``` -->
+@misc{wu2025evolverselfevolvingllmagents,
+      title={EvolveR: Self-Evolving LLM Agents through an Experience-Driven Lifecycle}, 
+      author={Rong Wu and Xiaoman Wang and Jianbiao Mei and Pinlong Cai and Daocheng Fu and Cheng Yang and Licheng Wen and Xuemeng Yang and Yufan Shen and Yuxin Wang and Botian Shi},
+      year={2025},
+      eprint={2510.16079},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2510.16079}, 
+}v
