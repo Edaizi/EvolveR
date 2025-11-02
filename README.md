@@ -36,6 +36,8 @@ This repository contains the official implementation of **EvolveR**, a framework
 
 ### Installation
 We recommend using Python 3.10 and Conda for environment management.
+
+#### 1. Create Training Environment
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Edaizi/EvolveR.git
@@ -46,8 +48,41 @@ conda create -n evolver python=3.10 -y
 conda activate evolver
 
 # 3. Install dependencies
-pip install -r requirements.txt 
+# install pytorch
+pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+# install vllm
+pip3 install vllm==0.6.3 # or you can install 0.5.4, 0.4.2 and 0.3.1
+
+# verl
+pip install -e .
+
+# flash attention 2
+pip3 install flash-attn --no-build-isolation
+pip install wandb
 ```
+
+#### 2. Create Embedding Server Environment
+```bash
+conda create -n vllm python=3.10
+pip install vllm
+```
+
+#### 3. Create Local Retrieval Server Environment
+```bash
+conda create -n retriever python=3.10
+conda activate retriever
+
+# we recommend installing torch with conda for faiss-gpu
+conda install pytorch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 pytorch-cuda=12.1 -c pytorch -c nvidia
+pip install transformers datasets pyserini
+
+## install the gpu version faiss to guarantee efficient RL rollout
+conda install -c pytorch -c nvidia faiss-gpu=1.8.0
+
+## API function
+pip install uvicorn fastapi
+```
+
 
 ### 🗄️ Data Preparation
 We will provide the processed data on Hugging Face Hub. You can download it from the following link:
@@ -63,8 +98,32 @@ Place your training and validation data in the following structure. The provided
 You can modify the `DATA_DIR` variable in `scripts/train_grpo-3b.sh` to point to your dataset location.
 
 ## 🚀 Training
+### 1. Deploy Embedding Server
+```bash
+conda activate vllm
+bash scripts/vllm_server.sh
+```
 
-Execute the main training script. It contains all necessary configurations for GRPO training.
+### 2. Deploy Local Retrieval Server
+#### Download the indexing and corpus.
+```bash
+conda activate retriever
+
+save_path=data/Wiki-corpus-embedd
+python scripts/download.py --save_path $save_path
+cat $save_path/part_* > $save_path/e5_Flat.index
+gzip -d $save_path/wiki-18.jsonl.gz
+```
+
+#### Launch Local Retrieval Server
+```bash
+conda activate retriever
+bash scripts/retrieval_launch.sh
+```
+
+
+### 3. Execute the main training script. 
+
 ```bash
 bash scripts/train_grpo-3b.sh
 ```
