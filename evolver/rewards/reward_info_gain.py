@@ -15,6 +15,7 @@ from .similarity_utils import EmbeddingClient, get_similarity_score
 
 
 @dataclass
+class InfoGainRewardOutput:
     reward: float
     metrics: dict = field(default_factory=dict)
 

@@ -279,23 +279,6 @@ class ActorRolloutRefWorker(Worker):
                                                                device_mesh=rollout_device_mesh)
             log_gpu_memory_usage('After building sharding manager', logger=None)
         
-        elif self.config.rollout.name == 'exp_vllm':
-            from evolver/.vllm_rollout import VllmRollout
-            from verl.workers.sharding_manager import FSDPVLLMShardingManager
-            log_gpu_memory_usage('Before building exp_vllm rollout', logger=None)
-            rollout = VllmRollout(actor_module=self.actor_module_fsdp,
-                                     config=self.config.rollout,
-                                     tokenizer=self.tokenizer,
-                                     model_hf_config=self.actor_model_config)
-            log_gpu_memory_usage('After building exp_vllm rollout', logger=None)
-            if torch.distributed.get_world_size() == 1:
-                self.config.rollout.load_format = 'dummy_hf'
-            rollout_sharding_manager = FSDPVLLMShardingManager(module=self.actor_module_fsdp,
-                                                               inference_engine=rollout.inference_engine,
-                                                               model_config=self.actor_model_config,
-                                                               full_params='hf' in self.config.rollout.load_format,
-                                                               device_mesh=rollout_device_mesh)
-            log_gpu_memory_usage('After building sharding manager for exp_vllm', logger=None)
 
         return rollout, rollout_sharding_manager
 

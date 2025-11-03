@@ -39,7 +39,7 @@ async def auto_import_data(
             experiment_name = os.environ.get("EXPERIMENT_NAME", "").replace('-', '_')
             if not experiment_name:
                 return StatusResponse(status="success", message="No experiment name provided; auto-import skipped.", timestamp=datetime.now().isoformat())
-            base_dir = Path("/mnt/petrelfs/wurong/workspace/evolver/data/exp-rl/exp_result") / experiment_name / "db_exports"
+            base_dir = Path("/mnt/petrelfs/wurong/workspace/evolver/data/evolver/result") / experiment_name / "db_exports"
             candidates = list(base_dir.glob("principles_*.jsonl")) + list(base_dir.glob("trajectories_*.jsonl"))
             if not candidates:
                 msg = f"No export files found under {base_dir}; auto-import skipped."

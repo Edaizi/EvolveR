@@ -69,7 +69,7 @@ async def startup_event():
                 await export_import.import_data(t_file, "trajectories", import_format, p_client, t_client)
             if not p_file and not t_file and experiment_name:
                 sanitized = experiment_name.replace('-', '_')
-                base_dir = Path("/mnt/petrelfs/wurong/workspace/evolver/data/exp-rl/exp_result") / sanitized / "db_exports"
+                base_dir = Path("/mnt/petrelfs/wurong/workspace/evolver/data/evolver/result") / sanitized / "db_exports"
                 p_candidates = list(base_dir.glob("principles_*.jsonl"))
                 t_candidates = list(base_dir.glob("trajectories_*.jsonl"))
                 if p_candidates:

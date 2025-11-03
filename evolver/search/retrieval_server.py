@@ -16,9 +16,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 
-from tools.logger_factory import setup_logger
-logger = setup_logger("retrieval_server")
-
 
 def load_corpus(corpus_path: str):
     corpus = datasets.load_dataset(
@@ -374,7 +371,7 @@ if __name__ == "__main__":
     parser.add_argument('--faiss_gpu', action='store_true', help='Use GPU for computation')
 
     args = parser.parse_args()
-    logger.info(f"Arguments: \n{args}")
+    print(f"Arguments: \n{args}")
 
     
     # 1) Build a config (could also parse from arguments).
