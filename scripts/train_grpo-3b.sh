@@ -16,8 +16,8 @@ export EMBEDDING_API_URL="http://127.0.0.1:8081/v1"
 export RETRIEVE_URL="http://127.0.0.1:8000/retrieve"
 
 export EXPERIENCE_EXPORT_DIR="data/evolver/result"
- 
-
+export VDB_PORT=8007
+export VDB_SERVER_URL="http://0.0.0.0:${VDB_PORT}"
 
 
 # --- MilvusDB Service Management ---
