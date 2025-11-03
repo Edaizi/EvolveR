@@ -124,7 +124,7 @@ python3 -m verl.trainer.main_ppo \
   actor_rollout_ref.rollout.temperature=1 \
   actor_rollout_ref.actor.state_masking=true \
   trainer.critic_warmup=0 \
-  trainer.logger=['console','swanlab','wandb'] \
+  trainer.logger=['console'] \
   +trainer.val_only=false \
   +trainer.val_before_train=false \
   trainer.val_do_sample=false \
